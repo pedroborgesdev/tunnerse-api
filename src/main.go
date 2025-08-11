@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
+	"os"
 	"tunnerse/config"
 	"tunnerse/debug"
+	"tunnerse/expose"
 	"tunnerse/logger"
 	"tunnerse/middlewares"
 	"tunnerse/routes"
@@ -11,6 +14,14 @@ import (
 )
 
 func main() {
+	go func() {
+		err := expose.Expose()
+		if err != nil {
+			fmt.Printf("\nFailed to expose: %s\n", err.Error())
+			os.Exit(0)
+		}
+	}()
+
 	debug.LoadDebugConfig()
 
 	logger.Log("INFO", "Application has been started", []logger.LogDetail{})
@@ -29,4 +40,6 @@ func main() {
 	routes.SetupRoutes(router)
 
 	router.Run(":" + config.AppConfig.HTTPPort)
+
+	select {}
 }
