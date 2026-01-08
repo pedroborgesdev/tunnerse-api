@@ -24,18 +24,49 @@
             * { box-sizing: border-box; }
             html, body { height: 100%; }
 
+            /*
+             * Mobile browsers can change the visible viewport height as the URL bar
+             * shows/hides, which makes large radial-gradients appear to “spill” into
+             * the bottom browser UI. We render the gradients on a fixed, clipped
+             * layer and size the layout using dynamic viewport units.
+             */
+            html {
+                background: var(--bg0);
+                overflow-x: clip;
+            }
+
+            body {
+                position: relative;
+                isolation: isolate;
+                min-height: 100vh;
+                min-height: 100dvh;
+                overflow-x: clip;
+                overscroll-behavior-y: none;
+            }
+
+            body::before {
+                content: "";
+                position: fixed;
+                inset: 0;
+                z-index: -1;
+                pointer-events: none;
+                background:
+                    radial-gradient(1200px 800px at 15% 12%, rgba(34, 197, 94, 0.18), transparent 55%),
+                    radial-gradient(1000px 700px at 92% 20%, rgba(34, 211, 238, 0.14), transparent 55%),
+                    linear-gradient(180deg, var(--bg0), var(--bg1));
+                transform: translateZ(0);
+                will-change: transform;
+            }
+
             body {
                 margin: 0;
                 color: var(--text);
                 font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
                     Ubuntu, Cantarell, Noto Sans, Helvetica, Arial;
-                background:
-                    radial-gradient(1200px 800px at 15% 12%, rgba(34, 197, 94, 0.18), transparent 55%),
-                    radial-gradient(1000px 700px at 92% 20%, rgba(34, 211, 238, 0.14), transparent 55%),
-                    linear-gradient(180deg, var(--bg0), var(--bg1));
                 display: grid;
                 place-items: center;
                 padding: 28px 16px;
+                padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
             }
 
             .wrap { width: min(980px, 100%); }
