@@ -7,6 +7,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/logger"
@@ -129,8 +130,13 @@ func Expose() error {
 		Handler: http.HandlerFunc(handler),
 	}
 
-	certFile := "./certs/certificates/tunnerse.com.crt"
-	keyFile := "./certs/certificates/tunnerse.com.key"
+	wd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+
+	certFile := filepath.Join(wd, "certs", "certificates", "tunnerse.com.crt")
+	keyFile := filepath.Join(wd, "certs", "certificates", "tunnerse.com.key")
 
 	logger.Log("INFO", "Servidor HTTPS rodando em :443", []logger.LogDetail{
 		{Key: "certFile", Value: certFile},

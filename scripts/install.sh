@@ -8,7 +8,7 @@ fi
 
 echo "Installing tunnerse API..."
 
-SCRIPT_DIR="$(dirname "$0")"
+SCRIPT_DIR="$(cd -- "$(dirname -- "$0")" && pwd)"
 PROJECT_ROOT="$SCRIPT_DIR/.."
 
 cd "$PROJECT_ROOT/bin" || exit 1
@@ -30,6 +30,13 @@ chmod +x /usr/local/bin/"$BIN_API"
 echo "Copying configuration files and static assets..."
 
 cd "$PROJECT_ROOT" || exit 1
+
+if [ -d "certs" ]; then
+    echo "  Copying certs/ directory..."
+    cp -r certs /usr/local/bin/
+else
+    echo "  Warning: certs/ directory not found"
+fi
 
 if [ -d "static" ]; then
     echo "  Copying static/ directory..."
@@ -53,6 +60,7 @@ else
 fi
 
 REAL_USER="${SUDO_USER:-$USER}"
+chown -R $REAL_USER:$REAL_USER /usr/local/bin/certs 2>/dev/null || true
 chown -R $REAL_USER:$REAL_USER /usr/local/bin/static 2>/dev/null || true
 chown $REAL_USER:$REAL_USER /usr/local/bin/tunnerse.config 2>/dev/null || true
 chown $REAL_USER:$REAL_USER /usr/local/bin/.env 2>/dev/null || true
