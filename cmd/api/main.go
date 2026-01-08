@@ -14,21 +14,22 @@ import (
 )
 
 func main() {
+	_ = debug.LoadDebugConfig()
+	config.LoadAppConfig()
+
+	errCh, err := expose.StartExpose()
+	if err != nil {
+		fmt.Printf("\nFailed to start expose: %s\n", err.Error())
+		os.Exit(1)
+	}
 	go func() {
-		err := expose.Expose()
-		if err != nil {
-			fmt.Printf("\nFailed to expose: %s\n", err.Error())
-			os.Exit(0)
+		if exposeErr := <-errCh; exposeErr != nil {
+			fmt.Printf("\nExpose error: %s\n", exposeErr.Error())
+			os.Exit(1)
 		}
 	}()
 
-	debug.LoadDebugConfig()
-
 	logger.Log("INFO", "Application has been started", []logger.LogDetail{})
-
-	config.LoadAppConfig()
-
-	// database.InitDB()
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
@@ -40,6 +41,4 @@ func main() {
 	routes.SetupRoutes(router)
 
 	router.Run(":" + config.AppConfig.HTTPPort)
-
-	select {}
 }

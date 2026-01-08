@@ -112,35 +112,60 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "domain not configured", http.StatusNotFound)
 }
 
-func Expose() error {
-	err := loadConfig("tunnerse.config")
-	if err != nil {
-		return fmt.Errorf("error to load config: %v", err)
-	}
-
-	go func() {
-		http.ListenAndServe(":80", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			url := "https://" + r.Host + r.URL.String()
-			http.Redirect(w, r, url, http.StatusMovedPermanently)
-		}))
-	}()
-
-	server := &http.Server{
-		Addr:    ":443",
-		Handler: http.HandlerFunc(handler),
+func StartExpose() (<-chan error, error) {
+	if err := loadConfig("tunnerse.config"); err != nil {
+		return nil, fmt.Errorf("error to load config: %v", err)
 	}
 
 	wd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("failed to get working directory: %w", err)
+		return nil, fmt.Errorf("failed to get working directory: %w", err)
 	}
 
 	certFile := filepath.Join(wd, "certs", "certificates", "tunnerse.com.crt")
 	keyFile := filepath.Join(wd, "certs", "certificates", "tunnerse.com.key")
 
-	logger.Log("INFO", "Servidor HTTPS rodando em :443", []logger.LogDetail{
+	errCh := make(chan error, 2)
+
+	redirectSrv := &http.Server{
+		Addr: ":80",
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			url := "https://" + r.Host + r.URL.String()
+			http.Redirect(w, r, url, http.StatusMovedPermanently)
+		}),
+	}
+
+	httpsSrv := &http.Server{
+		Addr:    ":443",
+		Handler: http.HandlerFunc(handler),
+	}
+
+	logger.Log("INFO", "Expose iniciado", []logger.LogDetail{
+		{Key: "redirect", Value: ":80"},
+		{Key: "https", Value: ":443"},
 		{Key: "certFile", Value: certFile},
 		{Key: "keyFile", Value: keyFile},
 	})
-	return server.ListenAndServeTLS(certFile, keyFile)
+
+	go func() {
+		if err := redirectSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- fmt.Errorf("redirect server error: %w", err)
+		}
+	}()
+
+	go func() {
+		if err := httpsSrv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+			errCh <- fmt.Errorf("https server error: %w", err)
+		}
+	}()
+
+	return errCh, nil
+}
+
+func Expose() error {
+	errCh, err := StartExpose()
+	if err != nil {
+		return err
+	}
+	return <-errCh
 }
