@@ -234,16 +234,6 @@ func (s *TunnelService) Response(name string, body io.ReadCloser) error {
 	}
 	tunnel.mu.Unlock()
 
-	if val := resp.Headers["Tunnerse"]; len(val) > 0 && val[0] == "healthcheck-response" {
-		if pathVal := resp.Headers["X-Request-Path"]; len(pathVal) > 0 && pathVal[0] == "/_tunnerse_healthcheck" {
-			if methodVal := resp.Headers["X-Request-Method"]; len(methodVal) > 0 && methodVal[0] == "HEAD" {
-				wr.Header().Set("Tunnerse", "healthcheck-conclued")
-				wr.WriteHeader(http.StatusNoContent)
-				return nil
-			}
-		}
-	}
-
 	for key, values := range resp.Headers {
 		if key == "X-Tunnerse-Request-ID" {
 			continue
