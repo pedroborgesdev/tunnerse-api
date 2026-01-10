@@ -117,6 +117,8 @@ func (c *TunnelController) Tunnel(ctx *gin.Context) {
 				c.tunnelService.NotFound(ctx.Writer)
 			case "timeout":
 				c.tunnelService.Timeout(ctx.Writer)
+			case "local-api-error":
+				c.tunnelService.LocalError(ctx.Writer)
 			default:
 				ctx.String(http.StatusInternalServerError, err.Error())
 			}

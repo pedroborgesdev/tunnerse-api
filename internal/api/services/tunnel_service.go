@@ -349,6 +349,13 @@ func (s *TunnelService) Tunnel(name, path string, w http.ResponseWriter, r *http
 			return fmt.Errorf("received nil response")
 		}
 
+		// Verifica se é um erro da API local
+		if tunnerseHeader, ok := respData.Resp.Headers["Tunnerse"]; ok && len(tunnerseHeader) > 0 {
+			if tunnerseHeader[0] == "local-api-error" {
+				return fmt.Errorf("local-api-error")
+			}
+		}
+
 		// Decodifica o body base64
 		bodyDecoded, err := base64.StdEncoding.DecodeString(respData.Resp.Body)
 		if err != nil {
@@ -422,8 +429,11 @@ func (s *TunnelService) NotFound(w http.ResponseWriter) {
 }
 
 func (s *TunnelService) Timeout(w http.ResponseWriter) {
+	s.serveHTML(w, http.StatusRequestTimeout, "tunnel-timeout", "timeout", "408 - tunnel timeout")
+}
 
-	s.serveHTML(w, http.StatusRequestTimeout, "tunnel-timeout", "timeout", "504 - tunnel timeout")
+func (s *TunnelService) LocalError(w http.ResponseWriter) {
+	s.serveHTML(w, http.StatusServiceUnavailable, "local-api-error", "localerror", "503 - local api error")
 }
 
 func (s *TunnelService) Home(w http.ResponseWriter) {
