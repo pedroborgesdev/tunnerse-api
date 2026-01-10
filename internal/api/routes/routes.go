@@ -2,6 +2,7 @@ package routes
 
 import (
 	"net/http"
+	"path/filepath"
 
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/config"
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/controllers"
@@ -15,6 +16,10 @@ func SetupRoutes(router *gin.Engine) {
 
 	router.GET("/health", func(c *gin.Context) {
 		c.String(http.StatusOK, "OK")
+	})
+
+	router.GET("/favicon.ico", func(c *gin.Context) {
+		c.File(filepath.Join("static", "favicon.ico"))
 	})
 
 	tunnel := router.Group("/")
