@@ -19,8 +19,6 @@ func SetupRoutes(router *gin.Engine) {
 
 	// Explicit homepage route (don't rely on NoRoute for "/").
 	// This keeps status codes consistent behind proxies/CDNs.
-	router.GET("/", tunnelController.Tunnel)
-	router.HEAD("/", tunnelController.Tunnel)
 
 	// router.GET("/favicon.ico", func(c *gin.Context) {
 	// 	c.File(filepath.Join("static", "favicon.ico"))
@@ -45,7 +43,9 @@ func SetupRoutes(router *gin.Engine) {
 		tunnel.POST("/response", tunnelController.Response)
 		tunnel.POST("/close", tunnelController.Close)
 		tunnel.GET("/", tunnelController.Tunnel)
-		tunnel.HEAD("/", tunnelController.Tunnel)
+		tunnel.HEAD("/_tunnerse_healthcheck", tunnelController.Tunnel)
+
+		router.NoRoute(tunnelController.Tunnel)
 	}
 
 	if !config.AppConfig.SUBDOMAIN {
@@ -54,6 +54,8 @@ func SetupRoutes(router *gin.Engine) {
 		tunnel.POST(":name/response", tunnelController.Response)
 		tunnel.POST(":name/close", tunnelController.Close)
 		tunnel.GET(":name/", tunnelController.Tunnel)
-		tunnel.HEAD(":name/", tunnelController.Tunnel)
+		tunnel.HEAD(":name/_tunnerse_healthcheck", tunnelController.Tunnel)
+
+		router.NoRoute(tunnelController.Tunnel)
 	}
 }

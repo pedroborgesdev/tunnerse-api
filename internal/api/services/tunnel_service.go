@@ -211,10 +211,21 @@ func (s *TunnelService) Response(name string, body io.ReadCloser) error {
 	}
 	tunnel.mu.Unlock()
 
+	// Healthcheck sanitization:
+	// Only map the special client response into "healthcheck-conclued" when the
+	// original pending request was the dedicated healthcheck endpoint.
+	//
+	// This prevents accidental contamination of real traffic (e.g. GET /)
+	// if the client ever sends "healtcheck-response" by mistake.
 	if val := resp.Headers["Tunnerse"]; len(val) > 0 && val[0] == "healtcheck-response" {
-		wr.Header().Set("Tunnerse", "healthcheck-conclued")
-		wr.WriteHeader(http.StatusNoContent)
-		return nil
+		// The tunnel handler (controllers) stores the original request path on the
+		// writer, so we can safely detect the request type here.
+		// If missing (older servers), fall back to the previous behavior.
+		if wr.Header().Get("Tunnerse-Request-Path") == "" || wr.Header().Get("Tunnerse-Request-Path") == "/_tunnerse_healthcheck" {
+			wr.Header().Set("Tunnerse", "healthcheck-conclued")
+			wr.WriteHeader(http.StatusNoContent)
+			return nil
+		}
 	}
 
 	for key, values := range resp.Headers {
@@ -361,7 +372,7 @@ func (s *TunnelService) NotFound(w http.ResponseWriter) {
 }
 
 func (s *TunnelService) Timeout(w http.ResponseWriter) {
-
+	// 504 indicates the upstream (local API) didn't respond in time.
 	s.serveHTML(w, http.StatusGatewayTimeout, "tunnel-timeout", "timeout", "504 - tunnel timeout")
 }
 

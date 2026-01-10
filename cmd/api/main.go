@@ -1,9 +1,13 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/gin-gonic/gin"
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/config"
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/debug"
+	"github.com/pedroborgesdev/tunnerse-api/internal/api/expose"
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/logger"
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/middlewares"
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/routes"
@@ -13,17 +17,17 @@ func main() {
 	_ = debug.LoadDebugConfig()
 	config.LoadAppConfig()
 
-	// errCh, err := expose.StartExpose()
-	// if err != nil {
-	// 	fmt.Printf("\nFailed to start expose: %s\n", err.Error())
-	// 	os.Exit(1)
-	// }
-	// go func() {
-	// 	if exposeErr := <-errCh; exposeErr != nil {
-	// 		fmt.Printf("\nExpose error: %s\n", exposeErr.Error())
-	// 		os.Exit(1)
-	// 	}
-	// }()
+	errCh, err := expose.StartExpose()
+	if err != nil {
+		fmt.Printf("\nFailed to start expose: %s\n", err.Error())
+		os.Exit(1)
+	}
+	go func() {
+		if exposeErr := <-errCh; exposeErr != nil {
+			fmt.Printf("\nExpose error: %s\n", exposeErr.Error())
+			os.Exit(1)
+		}
+	}()
 
 	logger.Log("INFO", "Application has been started", []logger.LogDetail{})
 

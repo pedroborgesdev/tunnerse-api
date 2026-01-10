@@ -109,6 +109,10 @@ func (c *TunnelController) Tunnel(ctx *gin.Context) {
 		return
 	}
 
+	// Store the original request path so the response handler can distinguish
+	// healthcheck requests from real user traffic.
+	ctx.Writer.Header().Set("Tunnerse-Request-Path", ctx.Request.URL.Path)
+
 	err := c.tunnelService.Tunnel(name, ctx.Request.URL.Path, ctx.Writer, ctx.Request)
 	if err != nil {
 		if config.AppConfig.WARNS_ON_HTML {
