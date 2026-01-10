@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/config"
+	"github.com/pedroborgesdev/tunnerse-api/internal/api/logger"
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/models"
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/utils"
 
@@ -34,19 +35,13 @@ func NewTunnelService() *TunnelService {
 	}
 }
 
-type PendingRequest struct {
-	Request *http.Request
-	Writer  http.ResponseWriter
-	ID      string
-}
-
 type Tunnel struct {
-	requestCh       chan string
-	pendingRequests map[string]*PendingRequest
-	resetTimer      func()
-	stopTimer       chan struct{}
-	closed          bool
-	mu              sync.Mutex
+	requestCh  chan *http.Request
+	writerCh   chan http.ResponseWriter
+	resetTimer func()
+	stopTimer  chan struct{}
+	closed     bool
+	mu         sync.Mutex
 }
 
 func (s *TunnelService) Register(name string) (string, error) {
@@ -69,9 +64,9 @@ func (s *TunnelService) Register(name string) (string, error) {
 	}
 
 	t := &Tunnel{
-		requestCh:       make(chan string, 10),
-		pendingRequests: make(map[string]*PendingRequest),
-		stopTimer:       make(chan struct{}),
+		requestCh: make(chan *http.Request),
+		writerCh:  make(chan http.ResponseWriter),
+		stopTimer: make(chan struct{}),
 	}
 
 	inactivityDuration := time.Duration(config.AppConfig.TUNNEL_INACTIVITY_LIFE_TIME) * time.Second
@@ -108,6 +103,7 @@ func (s *TunnelService) Register(name string) (string, error) {
 			s.mux.Unlock()
 
 			close(t.requestCh)
+			close(t.writerCh)
 			close(t.stopTimer)
 		}()
 
@@ -140,25 +136,16 @@ func (s *TunnelService) Get(name string, r *http.Request) ([]byte, error) {
 	}
 	tunnel.mu.Unlock()
 
-	var requestID string
+	var req *http.Request
 
 	select {
-	case requestID = <-tunnel.requestCh:
-		if requestID == "" {
+	case req = <-tunnel.requestCh:
+		if req == nil {
 			return nil, fmt.Errorf("nil request received")
 		}
 	case <-r.Context().Done():
 		return nil, fmt.Errorf("client disconnected; tunnel has a 1-minute grace period")
 	}
-
-	tunnel.mu.Lock()
-	pending, exists := tunnel.pendingRequests[requestID]
-	if !exists {
-		tunnel.mu.Unlock()
-		return nil, fmt.Errorf("request not found")
-	}
-	req := pending.Request
-	tunnel.mu.Unlock()
 
 	var bodyBytes []byte
 	if req.Body != nil {
@@ -178,12 +165,11 @@ func (s *TunnelService) Get(name string, r *http.Request) ([]byte, error) {
 	}
 
 	sreq := models.SerializableRequest{
-		Method:    req.Method,
-		Path:      req.URL.String(),
-		Header:    headersCopy,
-		Body:      string(bodyBytes),
-		Host:      req.Host,
-		RequestID: requestID,
+		Method: req.Method,
+		Path:   req.URL.String(),
+		Header: headersCopy,
+		Body:   string(bodyBytes),
+		Host:   req.Host,
 	}
 
 	return json.Marshal(&sreq)
@@ -204,27 +190,25 @@ func (s *TunnelService) Response(name string, body io.ReadCloser) error {
 		return fmt.Errorf("failed to decode response JSON: %w", err)
 	}
 
-	// Extract request ID from headers
-	requestIDHeader := resp.Headers["X-Tunnerse-Request-ID"]
-	if len(requestIDHeader) == 0 {
-		return fmt.Errorf("missing request ID in response")
-	}
-	requestID := requestIDHeader[0]
-
-	// Get the writer for this specific request
-	tunnel.mu.Lock()
-	pending, exists := tunnel.pendingRequests[requestID]
-	if !exists {
-		tunnel.mu.Unlock()
-		return fmt.Errorf("request not found for ID: %s", requestID)
-	}
-	wr := pending.Writer
-	delete(tunnel.pendingRequests, requestID)
-	tunnel.mu.Unlock()
+	// Log all response headers for debugging
+	logger.Log("DEBUG", "Response headers received", []logger.LogDetail{
+		{Key: "tunnel", Value: name},
+		{Key: "headers", Value: fmt.Sprintf("%+v", resp.Headers)},
+	})
 
 	bodyDecoded, err := base64.StdEncoding.DecodeString(resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to decode base64 body: %w", err)
+	}
+
+	var wr http.ResponseWriter
+	select {
+	case wr = <-tunnel.writerCh:
+	case <-time.After(5 * time.Second):
+		return fmt.Errorf("writer channel timeout")
+	}
+	if wr == nil {
+		return fmt.Errorf("invalid writer")
 	}
 
 	tunnel.mu.Lock()
@@ -235,9 +219,6 @@ func (s *TunnelService) Response(name string, body io.ReadCloser) error {
 	tunnel.mu.Unlock()
 
 	for key, values := range resp.Headers {
-		if key == "X-Tunnerse-Request-ID" {
-			continue
-		}
 		for _, v := range values {
 			wr.Header().Add(key, v)
 		}
@@ -304,22 +285,13 @@ func (s *TunnelService) Tunnel(name, path string, w http.ResponseWriter, r *http
 
 	timeout := 5 * time.Second
 
-	// Generate unique request ID
-	requestID := fmt.Sprintf("%d", time.Now().UnixNano())
-
 	tunnel.mu.Lock()
 	if tunnel.closed {
 		tunnel.mu.Unlock()
 		return fmt.Errorf("tunnel is closed")
 	}
-
-	// Store the pending request with its writer
-	tunnel.pendingRequests[requestID] = &PendingRequest{
-		Request: clonedRequest,
-		Writer:  w,
-		ID:      requestID,
-	}
 	requestCh := tunnel.requestCh
+	writerCh := tunnel.writerCh
 	tunnel.mu.Unlock()
 
 	defer func() {
@@ -328,12 +300,14 @@ func (s *TunnelService) Tunnel(name, path string, w http.ResponseWriter, r *http
 	}()
 
 	select {
-	case requestCh <- requestID:
+	case requestCh <- clonedRequest:
 	case <-time.After(timeout):
-		// Clean up on timeout
-		tunnel.mu.Lock()
-		delete(tunnel.pendingRequests, requestID)
-		tunnel.mu.Unlock()
+		return fmt.Errorf("timeout")
+	}
+
+	select {
+	case writerCh <- w:
+	case <-time.After(timeout):
 		return fmt.Errorf("timeout")
 	}
 
