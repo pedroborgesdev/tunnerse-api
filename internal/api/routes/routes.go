@@ -2,7 +2,6 @@ package routes
 
 import (
 	"net/http"
-	"path/filepath"
 
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/config"
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/controllers"
@@ -18,20 +17,20 @@ func SetupRoutes(router *gin.Engine) {
 		c.String(http.StatusOK, "OK")
 	})
 
-	router.GET("/favicon.ico", func(c *gin.Context) {
-		c.File(filepath.Join("static", "favicon.ico"))
-	})
-	router.HEAD("/favicon.ico", func(c *gin.Context) {
-		c.File(filepath.Join("static", "favicon.ico"))
-	})
-	// Some clients request /favicon.ico/ (with trailing slash). Support it too to
-	// avoid 301 redirects and falling through to NoRoute.
-	router.GET("/favicon.ico/", func(c *gin.Context) {
-		c.File(filepath.Join("static", "favicon.ico"))
-	})
-	router.HEAD("/favicon.ico/", func(c *gin.Context) {
-		c.File(filepath.Join("static", "favicon.ico"))
-	})
+	// router.GET("/favicon.ico", func(c *gin.Context) {
+	// 	c.File(filepath.Join("static", "favicon.ico"))
+	// })
+	// router.HEAD("/favicon.ico", func(c *gin.Context) {
+	// 	c.File(filepath.Join("static", "favicon.ico"))
+	// })
+	// // Some clients request /favicon.ico/ (with trailing slash). Support it too to
+	// // avoid 301 redirects and falling through to NoRoute.
+	// router.GET("/favicon.ico/", func(c *gin.Context) {
+	// 	c.File(filepath.Join("static", "favicon.ico"))
+	// })
+	// router.HEAD("/favicon.ico/", func(c *gin.Context) {
+	// 	c.File(filepath.Join("static", "favicon.ico"))
+	// })
 
 	tunnel := router.Group("/")
 
