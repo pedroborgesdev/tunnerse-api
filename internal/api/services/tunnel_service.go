@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/config"
+	"github.com/pedroborgesdev/tunnerse-api/internal/api/logger"
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/models"
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/utils"
 
@@ -189,6 +190,12 @@ func (s *TunnelService) Response(name string, body io.ReadCloser) error {
 		return fmt.Errorf("failed to decode response JSON: %w", err)
 	}
 
+	// Log all response headers for debugging
+	logger.Log("DEBUG", "Response headers received", []logger.LogDetail{
+		{Key: "tunnel", Value: name},
+		{Key: "headers", Value: fmt.Sprintf("%+v", resp.Headers)},
+	})
+
 	bodyDecoded, err := base64.StdEncoding.DecodeString(resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to decode base64 body: %w", err)
@@ -232,10 +239,18 @@ func (s *TunnelService) Response(name string, body io.ReadCloser) error {
 	return err
 }
 
-func (s *TunnelService) Tunnel(name, path string, w http.ResponseWriter, r *http.Request) error {
+func (s *TunnelService) Tunnel(name, path string, w http.ResponseWriter, r *http.Request, m string) error {
 	if err := s.validator.ValidateTunnelRegister(name); err != nil {
 		return err
 	}
+
+	// Log all incoming request headers for debugging
+	logger.Log("DEBUG", "Incoming request headers", []logger.LogDetail{
+		{Key: "tunnel", Value: name},
+		{Key: "path", Value: path},
+		{Key: "method", Value: r.Method},
+		{Key: "headers", Value: fmt.Sprintf("%+v", r.Header)},
+	})
 
 	s.mux.RLock()
 	tunnel, exists := s.tunnels[name]

@@ -109,7 +109,7 @@ func (c *TunnelController) Tunnel(ctx *gin.Context) {
 		return
 	}
 
-	err := c.tunnelService.Tunnel(name, ctx.Request.URL.Path, ctx.Writer, ctx.Request)
+	err := c.tunnelService.Tunnel(name, ctx.Request.URL.Path, ctx.Writer, ctx.Request, ctx.Request.Method)
 	if err != nil {
 		if config.AppConfig.WARNS_ON_HTML {
 			switch err.Error() {
