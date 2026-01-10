@@ -20,10 +20,12 @@ type SerializableRequest struct {
 	Body      string      `json:"body"`
 	Host      string      `json:"host"`
 	RequestID string      `json:"request_id"`
+	Token     string      `json:"token"` // Tunnerse-Request-Token
 }
 
 type ResponseData struct {
-	StatusCode int
-	Headers    map[string][]string
-	Body       string
+	StatusCode int                 `json:"status_code"`
+	Headers    map[string][]string `json:"headers"`
+	Body       string              `json:"body"`
+	Token      string              `json:"token"` // Tunnerse-Request-Token
 }

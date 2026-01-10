@@ -11,14 +11,13 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/config"
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/logger"
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/models"
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/utils"
-
-	"time"
-
 	"github.com/pedroborgesdev/tunnerse-api/internal/api/validation"
 )
 
@@ -36,12 +35,18 @@ func NewTunnelService() *TunnelService {
 }
 
 type Tunnel struct {
-	requestCh  chan *http.Request
-	writerCh   chan http.ResponseWriter
-	resetTimer func()
-	stopTimer  chan struct{}
-	closed     bool
-	mu         sync.Mutex
+	requestCh       chan *http.Request
+	writerCh        chan http.ResponseWriter
+	pendingRequests map[string]chan *ResponseWithToken // Token -> canal de resposta
+	resetTimer      func()
+	stopTimer       chan struct{}
+	closed          bool
+	mu              sync.Mutex
+}
+
+type ResponseWithToken struct {
+	Writer http.ResponseWriter
+	Resp   *models.ResponseData
 }
 
 func (s *TunnelService) Register(name string) (string, error) {
@@ -64,9 +69,10 @@ func (s *TunnelService) Register(name string) (string, error) {
 	}
 
 	t := &Tunnel{
-		requestCh: make(chan *http.Request),
-		writerCh:  make(chan http.ResponseWriter),
-		stopTimer: make(chan struct{}),
+		requestCh:       make(chan *http.Request),
+		writerCh:        make(chan http.ResponseWriter),
+		pendingRequests: make(map[string]chan *ResponseWithToken),
+		stopTimer:       make(chan struct{}),
 	}
 
 	inactivityDuration := time.Duration(config.AppConfig.TUNNEL_INACTIVITY_LIFE_TIME) * time.Second
@@ -96,6 +102,11 @@ func (s *TunnelService) Register(name string) (string, error) {
 
 			t.mu.Lock()
 			t.closed = true
+			// Limpa todos os canais de resposta pendentes
+			for token, ch := range t.pendingRequests {
+				close(ch)
+				delete(t.pendingRequests, token)
+			}
 			t.mu.Unlock()
 
 			s.mux.Lock()
@@ -147,6 +158,15 @@ func (s *TunnelService) Get(name string, r *http.Request) ([]byte, error) {
 		return nil, fmt.Errorf("client disconnected; tunnel has a 1-minute grace period")
 	}
 
+	// Extrai o token da requisição recebida
+	token := req.Header.Get("Tunnerse-Request-Token")
+	if token == "" {
+		// Se não houver token no header, tenta pegar do contexto
+		if tokenVal := req.Context().Value("tunnerse-token"); tokenVal != nil {
+			token = tokenVal.(string)
+		}
+	}
+
 	var bodyBytes []byte
 	if req.Body != nil {
 		defer req.Body.Close()
@@ -170,6 +190,7 @@ func (s *TunnelService) Get(name string, r *http.Request) ([]byte, error) {
 		Header: headersCopy,
 		Body:   string(bodyBytes),
 		Host:   req.Host,
+		Token:  token, // Inclui o token na resposta
 	}
 
 	return json.Marshal(&sreq)
@@ -193,22 +214,13 @@ func (s *TunnelService) Response(name string, body io.ReadCloser) error {
 	// Log all response headers for debugging
 	logger.Log("DEBUG", "Response headers received", []logger.LogDetail{
 		{Key: "tunnel", Value: name},
+		{Key: "token", Value: resp.Token},
 		{Key: "headers", Value: fmt.Sprintf("%+v", resp.Headers)},
 	})
 
-	bodyDecoded, err := base64.StdEncoding.DecodeString(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to decode base64 body: %w", err)
-	}
-
-	var wr http.ResponseWriter
-	select {
-	case wr = <-tunnel.writerCh:
-	case <-time.After(5 * time.Second):
-		return fmt.Errorf("writer channel timeout")
-	}
-	if wr == nil {
-		return fmt.Errorf("invalid writer")
+	// Valida se o token está presente
+	if resp.Token == "" {
+		return fmt.Errorf("missing Tunnerse-Request-Token in response")
 	}
 
 	tunnel.mu.Lock()
@@ -216,20 +228,29 @@ func (s *TunnelService) Response(name string, body io.ReadCloser) error {
 		tunnel.mu.Unlock()
 		return fmt.Errorf("tunnel is closed")
 	}
+
+	// Busca o canal de resposta para este token específico
+	responseCh, exists := tunnel.pendingRequests[resp.Token]
+	if !exists {
+		tunnel.mu.Unlock()
+		return fmt.Errorf("no pending request found for token: %s (expired or invalid)", resp.Token)
+	}
+	delete(tunnel.pendingRequests, resp.Token)
 	tunnel.mu.Unlock()
 
-	for key, values := range resp.Headers {
-		for _, v := range values {
-			wr.Header().Add(key, v)
-		}
+	// Envia a resposta para o canal específico desta requisição
+	select {
+	case responseCh <- &ResponseWithToken{Resp: &resp}:
+		close(responseCh)
+	case <-time.After(5 * time.Second):
+		close(responseCh)
+		return fmt.Errorf("response channel timeout for token: %s", resp.Token)
 	}
 
-	wr.WriteHeader(resp.StatusCode)
-	_, err = wr.Write(bodyDecoded)
-	return err
+	return nil
 }
 
-func (s *TunnelService) Tunnel(name, path string, w http.ResponseWriter, r *http.Request, m string) error {
+func (s *TunnelService) Tunnel(name, path string, w http.ResponseWriter, r *http.Request) error {
 	if err := s.validator.ValidateTunnelRegister(name); err != nil {
 		return err
 	}
@@ -251,6 +272,27 @@ func (s *TunnelService) Tunnel(name, path string, w http.ResponseWriter, r *http
 	}
 	tunnel.mu.Unlock()
 
+	// Gera um token único para esta requisição
+	token := uuid.New().String()
+
+	// Cria um canal específico para a resposta desta requisição
+	responseCh := make(chan *ResponseWithToken, 1)
+
+	tunnel.mu.Lock()
+	if tunnel.closed {
+		tunnel.mu.Unlock()
+		return fmt.Errorf("tunnel is closed")
+	}
+	tunnel.pendingRequests[token] = responseCh
+	tunnel.mu.Unlock()
+
+	// Cleanup: remove o canal se a resposta não chegar
+	defer func() {
+		tunnel.mu.Lock()
+		delete(tunnel.pendingRequests, token)
+		tunnel.mu.Unlock()
+	}()
+
 	var bodyBytes []byte
 	if r.Body != nil {
 		defer r.Body.Close()
@@ -265,6 +307,9 @@ func (s *TunnelService) Tunnel(name, path string, w http.ResponseWriter, r *http
 	clonedRequest := r.Clone(r.Context())
 	clonedRequest.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
+	// Adiciona o token ao header da requisição
+	clonedRequest.Header.Set("Tunnerse-Request-Token", token)
+
 	if !config.AppConfig.SUBDOMAIN {
 		if parts := strings.SplitN(clonedRequest.URL.Path, "/", 3); len(parts) >= 3 {
 			clonedRequest.URL.Path = "/" + parts[2]
@@ -278,12 +323,7 @@ func (s *TunnelService) Tunnel(name, path string, w http.ResponseWriter, r *http
 		clonedRequest.RequestURI = path
 	}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
-	timeout := 5 * time.Second
+	timeout := 30 * time.Second
 
 	tunnel.mu.Lock()
 	if tunnel.closed {
@@ -291,27 +331,47 @@ func (s *TunnelService) Tunnel(name, path string, w http.ResponseWriter, r *http
 		return fmt.Errorf("tunnel is closed")
 	}
 	requestCh := tunnel.requestCh
-	writerCh := tunnel.writerCh
 	tunnel.mu.Unlock()
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Envia a requisição
 	select {
 	case requestCh <- clonedRequest:
 	case <-time.After(timeout):
 		return fmt.Errorf("timeout")
+	case <-r.Context().Done():
+		return fmt.Errorf("client disconnected")
 	}
 
+	// Aguarda a resposta específica para este token
 	select {
-	case writerCh <- w:
+	case respData := <-responseCh:
+		if respData == nil || respData.Resp == nil {
+			return fmt.Errorf("received nil response")
+		}
+
+		// Decodifica o body base64
+		bodyDecoded, err := base64.StdEncoding.DecodeString(respData.Resp.Body)
+		if err != nil {
+			return fmt.Errorf("failed to decode base64 body: %w", err)
+		}
+
+		// Escreve os headers
+		for key, values := range respData.Resp.Headers {
+			for _, v := range values {
+				w.Header().Add(key, v)
+			}
+		}
+
+		// Escreve o status code e body
+		w.WriteHeader(respData.Resp.StatusCode)
+		_, err = w.Write(bodyDecoded)
+		return err
+
 	case <-time.After(timeout):
 		return fmt.Errorf("timeout")
+	case <-r.Context().Done():
+		return fmt.Errorf("client disconnected")
 	}
-
-	return nil
 }
 
 func (s *TunnelService) Close(name string) error {
