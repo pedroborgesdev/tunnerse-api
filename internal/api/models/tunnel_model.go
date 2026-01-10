@@ -14,11 +14,12 @@ type Tunnel struct {
 }
 
 type SerializableRequest struct {
-	Method string      `json:"method"`
-	Path   string      `json:"path"`
-	Header http.Header `json:"headers"`
-	Body   string      `json:"body"`
-	Host   string      `json:"host"`
+	Method    string      `json:"method"`
+	Path      string      `json:"path"`
+	Header    http.Header `json:"headers"`
+	Body      string      `json:"body"`
+	Host      string      `json:"host"`
+	RequestID string      `json:"request_id"`
 }
 
 type ResponseData struct {
