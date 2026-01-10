@@ -17,6 +17,7 @@ type Config struct {
 
 	TUNNEL_LIFE_TIME            int
 	TUNNEL_INACTIVITY_LIFE_TIME int
+	TUNNEL_REQUEST_TIMEOUT      int // Timeout para requisições através do túnel (em segundos)
 }
 
 var AppConfig Config
@@ -38,6 +39,7 @@ func LoadAppConfig() error {
 
 		TUNNEL_LIFE_TIME:            getEnvInt("TUNNEL_LIFE_TIME", 86400),
 		TUNNEL_INACTIVITY_LIFE_TIME: getEnvInt("TUNNEL_INACTIVITY_LIFE_TIME", 86400),
+		TUNNEL_REQUEST_TIMEOUT:      getEnvInt("TUNNEL_REQUEST_TIMEOUT", 30), // 30 segundos padrão
 	}
 
 	logger.Log("ENV", "Defined environment variables", []logger.LogDetail{

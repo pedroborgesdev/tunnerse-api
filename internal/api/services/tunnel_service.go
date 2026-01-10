@@ -323,7 +323,7 @@ func (s *TunnelService) Tunnel(name, path string, w http.ResponseWriter, r *http
 		clonedRequest.RequestURI = path
 	}
 
-	timeout := 30 * time.Second
+	timeout := time.Duration(config.AppConfig.TUNNEL_REQUEST_TIMEOUT) * time.Second
 
 	tunnel.mu.Lock()
 	if tunnel.closed {
