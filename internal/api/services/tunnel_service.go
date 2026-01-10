@@ -361,9 +361,10 @@ func (s *TunnelService) NotFound(w http.ResponseWriter) {
 }
 
 func (s *TunnelService) Timeout(w http.ResponseWriter) {
-	s.serveHTML(w, http.StatusNotFound, "tunnel-timeout", "timeout", "404 - tunnel timeout")
+
+	s.serveHTML(w, http.StatusGatewayTimeout, "tunnel-timeout", "timeout", "504 - tunnel timeout")
 }
 
 func (s *TunnelService) Home(w http.ResponseWriter) {
-	s.serveHTML(w, http.StatusNotFound, "tunnel-working", "running", "404 - tunnel timeout")
+	s.serveHTML(w, http.StatusOK, "tunnel-working", "running", "Tunnerse is running")
 }
