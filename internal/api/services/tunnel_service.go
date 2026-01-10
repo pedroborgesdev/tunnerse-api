@@ -373,7 +373,7 @@ func (s *TunnelService) NotFound(w http.ResponseWriter) {
 
 func (s *TunnelService) Timeout(w http.ResponseWriter) {
 	// 504 indicates the upstream (local API) didn't respond in time.
-	s.serveHTML(w, http.StatusGatewayTimeout, "tunnel-timeout", "timeout", "504 - tunnel timeout")
+	s.serveHTML(w, http.StatusRequestTimeout, "tunnel-timeout", "timeout", "504 - tunnel timeout")
 }
 
 func (s *TunnelService) Home(w http.ResponseWriter) {
