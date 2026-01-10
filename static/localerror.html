@@ -5,17 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="color-scheme" content="dark" />
         
-        <                <header class="top">
-                    <span class="badge" aria-label="Status">
-                        <span class="dot" aria-hidden="true"></span>
-                        <strong style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;">Local API Error</strong>
-                    </span>
-
-                    <div>
-                        <h1>Tunnel Active · Local API Offline</h1>
-                        <p class="subtitle">Your tunnel is running, but the local API is not responding.</p>
-                    </div>
-                </header>rse | Local API Error</title>
+    <title>Tunnerse | Local API Error</title>
 
         <style>
             :root {
@@ -26,8 +16,7 @@
                 --text: rgba(255, 255, 255, 0.92);
                 --muted: rgba(255, 255, 255, 0.68);
                 --muted2: rgba(255, 255, 255, 0.52);
-                --error: #ef4444;
-                --warn: #f59e0b;
+                --warn: #f97316;
                 --accent2: #22d3ee;
                 --shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
                 --radius: 18px;
@@ -63,8 +52,8 @@
                 z-index: -1;
                 pointer-events: none;
                 background:
-                    radial-gradient(1200px 800px at 18% 12%, rgba(239, 68, 68, 0.14), transparent 55%),
-                    radial-gradient(1000px 700px at 92% 20%, rgba(245, 158, 11, 0.10), transparent 55%),
+                    radial-gradient(1200px 800px at 18% 12%, rgba(245, 158, 11, 0.16), transparent 55%),
+                    radial-gradient(1000px 700px at 92% 20%, rgba(34, 211, 238, 0.12), transparent 55%),
                     linear-gradient(180deg, var(--bg0), var(--bg1));
                 transform: translateZ(0);
                 will-change: transform;
@@ -98,7 +87,7 @@
                 align-items: center;
                 padding: 22px 22px 14px;
                 border-bottom: 1px solid var(--line);
-                background: linear-gradient(90deg, rgba(239, 68, 68, 0.14), rgba(245, 158, 11, 0.08));
+                background: linear-gradient(90deg, rgba(245, 158, 11, 0.12), rgba(34, 211, 238, 0.06));
             }
 
             .badge {
@@ -115,8 +104,8 @@
                 width: 10px;
                 height: 10px;
                 border-radius: 999px;
-                background: var(--error);
-                box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.20);
+                background: var(--warn);
+                box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.22);
             }
 
             h1 {
@@ -239,47 +228,54 @@
                 <header class="top">
                     <span class="badge" aria-label="Status">
                         <span class="dot" aria-hidden="true"></span>
-                        <strong style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;">Timeout</strong>
+                        <strong style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;">Local API Error</strong>
                     </span>
 
                     <div>
-                        <h1>Tunnerse | Timeout</h1>
-                        <p class="subtitle">The client didn’t reply in time.</p>
+                        <h1>Tunnel active · Local API error</h1>
+                        <p class="subtitle">The tunnel is running, but your local API didn’t respond.</p>
                     </div>
                 </header>
 
                 <div class="content">
                     <div class="grid">
                         <div class="panel">
-                            <p class="lead"><strong>✅ The tunnel is active and working correctly</strong>, but your local application on the specified port did not respond or returned an error.</p>
-                            <p class="lead muted" style="margin-top: 14px;">
-                                <strong>Common causes:</strong>
+                            <p class="lead"><strong>Tunnel is active</strong>, but <strong>your local API is offline or returning an error</strong>.</p>
+                            <p class="lead muted" style="margin-top: 10px;">
+                                Tunnerse Server is receiving requests normally and forwarding them through the tunnel.
+                                The failure happened when Tunnerse CLI tried to reach your local application (port/service not running, wrong port, crash, or slow response).
                             </p>
-                            <ul style="margin: 8px 0 0 20px; padding: 0; color: var(--muted); line-height: 1.7;">
-                                <li>Local application is not running</li>
-                                <li>Wrong port configured in the tunnel</li>
-                                <li>Application crashed or hung</li>
-                                <li>Firewall blocking localhost connections</li>
-                                <li>Application took too long to respond (timeout)</li>
-                            </ul>
-                            <p class="lead muted" style="margin-top: 14px;">
-                                <strong>What to do:</strong> Check if your local application is running and accessible on the configured port. The tunnel itself is functioning normally.
+                            <p class="lead muted" style="margin-top: 10px;">
+                                <strong>Fix:</strong> start your local API and ensure the configured port is reachable.
                             </p>
                         </div>
 
                         <aside class="panel">
                             <div class="kv">
                                 <div class="row">
-                                    <span class="k">Tunnel Status</span>
-                                    <span class="v" style="color: #22d3ee;">✓ Active</span>
+                                    <span class="k">Tunnel</span>
+                                    <span class="v" style="color: rgba(34, 211, 238, 0.95);">Active</span>
                                 </div>
                                 <div class="row">
                                     <span class="k">Local API</span>
-                                    <span class="v" style="color: #ef4444;">✗ Offline</span>
+                                    <span class="v" style="color: rgba(249, 115, 22, 0.95);">Error / Offline</span>
                                 </div>
                                 <div class="row">
-                                    <span class="k">Error Code</span>
-                                    <span class="v">502 Bad Gateway</span>
+                                    <span class="k">Next step</span>
+                                    <span class="v">Start local service</span>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px;">
+                                <div class="kv">
+                                    <div class="row">
+                                        <span class="k">Author</span>
+                                        <span class="v"><a href="https://github.com/pedroborgesdev">pedroborgesdev</a></span>
+                                    </div>
+                                    <div class="row">
+                                        <span class="k">Project</span>
+                                        <span class="v"><a href="https://github.com/pedroborgesdev/tunnerse.git">Tunnerse</a></span>
+                                    </div>
                                 </div>
                             </div>
                         </aside>
@@ -287,8 +283,8 @@
                 </div>
 
                 <footer class="foot">
-                    <span class="hint">💡 Tip: Start your local application and refresh the page</span>
-                    <span class="pill">Tunnerse CLI is running</span>
+                    <span class="hint">Tip: the tunnel is up — check the local API process and port.</span>
+                    <span class="pill">Tunnel: active</span>
                 </footer>
             </section>
         </main>
