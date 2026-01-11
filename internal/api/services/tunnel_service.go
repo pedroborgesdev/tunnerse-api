@@ -76,10 +76,14 @@ func (s *TunnelService) Register(name string) (string, error) {
 	}
 
 	inactivityDuration := time.Duration(config.AppConfig.TUNNEL_INACTIVITY_LIFE_TIME) * time.Second
-	maxLifetimeDuration := time.Duration(config.AppConfig.TUNNEL_LIFE_TIME) * time.Second
-
 	inactivityTimer := time.NewTimer(inactivityDuration)
-	maxLifetimeTimer := time.NewTimer(maxLifetimeDuration)
+
+	var maxLifetimeTimer *time.Timer
+	maxLifetimeDuration := time.Duration(config.AppConfig.TUNNEL_LIFE_TIME) * time.Second
+	hasMaxLifetime := config.AppConfig.TUNNEL_LIFE_TIME > 0
+	if hasMaxLifetime {
+		maxLifetimeTimer = time.NewTimer(maxLifetimeDuration)
+	}
 
 	t.resetTimer = func() {
 		if !inactivityTimer.Stop() {
@@ -98,7 +102,9 @@ func (s *TunnelService) Register(name string) (string, error) {
 	go func(tunnelName string, t *Tunnel) {
 		defer func() {
 			inactivityTimer.Stop()
-			maxLifetimeTimer.Stop()
+			if hasMaxLifetime {
+				maxLifetimeTimer.Stop()
+			}
 
 			t.mu.Lock()
 			t.closed = true
@@ -118,10 +124,17 @@ func (s *TunnelService) Register(name string) (string, error) {
 			close(t.stopTimer)
 		}()
 
-		select {
-		case <-inactivityTimer.C:
-		case <-maxLifetimeTimer.C:
-		case <-t.stopTimer:
+		if hasMaxLifetime {
+			select {
+			case <-inactivityTimer.C:
+			case <-maxLifetimeTimer.C:
+			case <-t.stopTimer:
+			}
+		} else {
+			select {
+			case <-inactivityTimer.C:
+			case <-t.stopTimer:
+			}
 		}
 	}(tunnelName, t)
 
